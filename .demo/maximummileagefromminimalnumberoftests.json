@@ -14,6 +14,16 @@
       ]
     },
     {
+      "id": "scene-mk481q72-osxg",
+      "title": "Zoom in 3",
+      "steps": [
+        {
+          "action": "zoomIn",
+          "zoom": 3
+        }
+      ]
+    },
+    {
       "id": "demo-mjysqmwo-23e2",
       "title": "5-How-1-nice-framework-1",
       "steps": [
@@ -52,6 +62,12 @@
           "position": "14",
           "contentPath": ".demo/code-snippets/component-test-class-insert-1.txt",
           "insertTypingMode": "character-by-character"
+        },
+        {
+          "action": "highlight",
+          "path": ".demo/temp-files/1.cs",
+          "position": "14,8:14,74",
+          "highlightWholeLine": false
         }
       ]
     },
@@ -65,6 +81,12 @@
           "position": "16",
           "contentPath": ".demo/code-snippets/component-test-class-insert-2.txt",
           "insertTypingMode": "character-by-character"
+        },
+        {
+          "action": "highlight",
+          "position": "16:17",
+          "highlightWholeLine": true,
+          "path": ".demo/temp-files/1.cs"
         }
       ]
     },
@@ -78,6 +100,12 @@
           "position": "19",
           "contentPath": ".demo/code-snippets/component-test-class-insert-3.txt",
           "insertTypingMode": "character-by-character"
+        },
+        {
+          "action": "highlight",
+          "path": ".demo/temp-files/1.cs",
+          "position": "19",
+          "highlightWholeLine": true
         }
       ]
     },
@@ -91,6 +119,31 @@
           "position": "21",
           "highlightWholeLine": true,
           "insertTypingMode": "character-by-character"
+        },
+        {
+          "action": "highlight",
+          "path": ".demo/temp-files/1.cs",
+          "position": "14:23",
+          "highlightWholeLine": true
+        }
+      ]
+    },
+    {
+      "id": "scene-mk482gb3-e2g0",
+      "title": "Reset zoom",
+      "steps": [
+        {
+          "action": "zoomReset"
+        }
+      ]
+    },
+    {
+      "id": "scene-mk4814we-kfs8",
+      "title": "Ending slide",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/ending.md"
         }
       ]
     }

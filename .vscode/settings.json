@@ -7,5 +7,8 @@
     "workbench.editor.showTabs": "multiple",
     "workbench.activityBar.location": "default",
     "demoTime.timer": 60,
-    "demoTime.insertTypingSpeed": 5
+    "demoTime.insertTypingSpeed": 5,
+    "demoTime.highlightBorderColor": "rgba(255,255,0,0.06)",
+    "demoTime.highlightOpacity": 0.65,
+    "demoTime.highlightBlur": 1
 }
