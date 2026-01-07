@@ -15,7 +15,7 @@
     },
     {
       "id": "demo-mjysqmwo-23e2",
-      "title": "5-How-1-nice-framework",
+      "title": "5-How-1-nice-framework-1",
       "steps": [
         {
           "action": "create",
@@ -25,10 +25,12 @@
         {
           "action": "open",
           "path": ".demo/temp-files/1.cs"
-        },
-        {
-          "action": "pause"
-        },
+        }
+      ]
+    },
+    {
+      "title": "5-How-1-nice-framework-2",
+      "steps": [
         {
           "action": "insert",
           "position": "11",
@@ -37,10 +39,12 @@
           "insertTypingSpeed": 10,
           "path": ".demo/temp-files/1.cs",
           "contentPath": ".demo/code-snippets/component-test-class-add-test.txt"
-        },
-        {
-          "action": "pause"
-        },
+        }
+      ]
+    },
+    {
+      "title": "5-How-1-nice-framework-3",
+      "steps": [
         {
           "action": "insert",
           "path": ".demo/temp-files/1.cs",
@@ -48,10 +52,12 @@
           "position": "14",
           "contentPath": ".demo/code-snippets/component-test-class-insert-1.txt",
           "insertTypingMode": "character-by-character"
-        },
-        {
-          "action": "pause"
-        },
+        }
+      ]
+    },
+    {
+      "title": "5-How-1-nice-framework-4",
+      "steps": [
         {
           "action": "insert",
           "path": ".demo/temp-files/1.cs",
@@ -59,10 +65,12 @@
           "position": "16",
           "contentPath": ".demo/code-snippets/component-test-class-insert-2.txt",
           "insertTypingMode": "character-by-character"
-        },
-        {
-          "action": "pause"
-        },
+        }
+      ]
+    },
+    {
+      "title": "5-How-1-nice-framework-5",
+      "steps": [
         {
           "action": "insert",
           "path": ".demo/temp-files/1.cs",
@@ -70,10 +78,12 @@
           "position": "19",
           "contentPath": ".demo/code-snippets/component-test-class-insert-3.txt",
           "insertTypingMode": "character-by-character"
-        },
-        {
-          "action": "pause"
-        },
+        }
+      ]
+    },
+    {
+      "title": "5-How-1-nice-framework-6",
+      "steps": [
         {
           "action": "insert",
           "path": ".demo/temp-files/1.cs",
@@ -81,9 +91,6 @@
           "position": "21",
           "highlightWholeLine": true,
           "insertTypingMode": "character-by-character"
-        },
-        {
-          "action": "pause"
         }
       ]
     }
