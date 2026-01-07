@@ -1,0 +1,301 @@
+{
+  "$schema": "https://demotime.show/demo-time.schema.json",
+  "title": "MaximumMileageFromMinimalNumberOfTests",
+  "version": 2,
+  "demos": [
+    {
+      "id": "demo-mjyhvpx8-0o72",
+      "title": "0-blank-and-title",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/0-blank.md"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/0-title-maxValueMinTests.md"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjy8dvbh-xnzk",
+      "title": "1-scenario-slide1",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/1-scenario.md"
+        },
+        {
+          "action": "pause",
+          "disabled": false
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/1-scenario-video1.md",
+          "disabled": false
+        },
+        {
+          "action": "pause",
+          "disabled": true
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/1-scenario-video2.md",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "id": "demo-mk04w94m-ybob",
+      "title": "ScenarioVideo",
+      "steps": [
+        {
+          "action": "open",
+          "path": ".demo/assets/complex-scenario.mp4",
+          "disabled": true
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/1-scenario-video1.md"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "demo-mk0512nt-dcez",
+      "title": "ScenarioSequenceVideo",
+      "steps": [
+        {
+          "action": "open",
+          "path": ".demo/assets/scenario-sequence.mp4"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjy88mdk-f2vv",
+      "title": "2-intro-slides",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/2-intro.md"
+        },
+        {
+          "action": "pause",
+          "disabled": true
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/2-intro-video.md",
+          "disabled": true
+        }
+      ],
+      "notes": {
+        "path": ".demo/notes/demo-mjy88mdk-f2vv_notes.md"
+      }
+    },
+    {
+      "id": "demo-mjzsdbxz-kj3b",
+      "title": "2-intro-video",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/2-intro-video.md"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjyiseog-zqmf",
+      "title": "3-what-slides",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/3-what.md"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjyirkl3-oxvu",
+      "title": "4-show-me-the-test",
+      "steps": [
+        {
+          "action": "open",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTests.cs"
+        },
+        {
+          "action": "selection",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTests.cs",
+          "position": "35:69",
+          "highlightWholeLine": true,
+          "zoom": 3
+        }
+      ]
+    },
+    {
+      "id": "demo-mjyw5g6p-lawj",
+      "title": "5-How-anatomy",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/5-how.md"
+        },
+        {
+          "action": "pause",
+          "disabled": true
+        },
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/5-how-video.md",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "id": "demo-mjzsgwp9-smiv",
+      "title": "5-How-anatomy-video",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/5-how-video.md"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjysqmwo-23e2",
+      "title": "5-How-1-nice-framework",
+      "steps": [
+        {
+          "action": "create",
+          "path": ".demo/temp-files/1.cs",
+          "content": "public class ComponentTests\n{\n    private ComponentTestFixture testFixture;\n\n    [Before(Test)]\n    public void Setup()\n    {\n        testFixture = new ComponentTestFixture();\n    }\n\n    [Test]\n    public void Return_a_WeatherReport_given_valid_region_and_date()\n    {\n        \n\n\n    }\n}"
+        },
+        {
+          "action": "open",
+          "path": ".demo/temp-files/1.cs"
+        },
+        {
+          "action": "open",
+          "path": ".demo/temp-files/1.cs"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "insert",
+          "content": "        var (given, when, then, cannedData) = testFixture.SetupHelpers();",
+          "position": "14",
+          "highlightWholeLine": true,
+          "insertTypingMode": "character-by-character",
+          "insertTypingSpeed": 10,
+          "path": ".demo/temp-files/1.cs"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "insert",
+          "path": ".demo/temp-files/1.cs",
+          "content": "        given.WeHaveAWeatherReportRequest(\"bristol\", DateTime.Now, out var apiRequest)",
+          "highlightWholeLine": true,
+          "position": "14"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "insert",
+          "path": ".demo/temp-files/1.cs",
+          "content": "        when.WeSendTheMessageToTheApi(apiRequest, out var response);",
+          "highlightWholeLine": true,
+          "position": "19"
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "insert",
+          "path": ".demo/temp-files/1.cs",
+          "content": "        then.TheResponseCodeShouldBe(response, HttpStatusCode.OK)",
+          "highlightWholeLine": true,
+          "position": "21"
+        },
+        {
+          "action": "executeVSCodeCommand",
+          "command": "editor.action.fontZoomReset"
+        }
+      ]
+    },
+    {
+      "id": "demo-mjyx2eok-35s1",
+      "title": "5-How-2-single-fixture",
+      "steps": [
+        {
+          "action": "open",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTestFixture.cs"
+        },
+        {
+          "action": "selection",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTestFixture.cs",
+          "position": "17:20",
+          "highlightWholeLine": true,
+          "zoom": 3
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "selection",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTestFixture.cs",
+          "position": "41:43",
+          "highlightWholeLine": true,
+          "zoom": 3
+        },
+        {
+          "action": "pause"
+        },
+        {
+          "action": "selection",
+          "path": "tests/WeatherApp.Tests.TUnit/ComponentTestFixture.cs",
+          "position": "45:51",
+          "highlightWholeLine": true,
+          "zoom": 3
+        }
+      ]
+    },
+    {
+      "id": "demo-mjzk6i9o-qed9",
+      "title": "test",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/testslide.md"
+        }
+      ],
+      "disabled": false
+    },
+    {
+      "id": "demo-mjzt02uv-jx4j",
+      "title": "test2",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/testslide2.md"
+        }
+      ]
+    }
+  ],
+  "description": "testing DemoTime for the code demos from my talk"
+}
