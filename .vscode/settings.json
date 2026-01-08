@@ -1,7 +1,8 @@
 {
     "demoTime.customWebComponents": [
         ".demo/custom-components/highlight.js",
-        ".demo/custom-components/video-component.js"
+        ".demo/custom-components/video-component.js",
+        ".demo/custom-components/vivus-component.js"
     ],
     "workbench.statusBar.visible": true,
     "workbench.editor.showTabs": "multiple",
@@ -10,5 +11,7 @@
     "demoTime.insertTypingSpeed": 5,
     "demoTime.highlightBorderColor": "rgba(255,255,0,0.06)",
     "demoTime.highlightOpacity": 0.65,
-    "demoTime.highlightBlur": 1
+    "demoTime.highlightBlur": 1,
+    "demoTime.customTheme": "",
+    "editor.codeLens": true
 }

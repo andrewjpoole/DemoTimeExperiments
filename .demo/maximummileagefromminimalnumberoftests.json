@@ -15,11 +15,19 @@
     },
     {
       "id": "scene-mk481q72-osxg",
-      "title": "Zoom in 3",
+      "title": "Prepare vscode",
       "steps": [
         {
           "action": "zoomIn",
           "zoom": 3
+        },
+        {
+          "action": "setSetting",
+          "disabled": false,
+          "setting": {
+            "key": "editor.codeLens",
+            "value": false
+          }
         }
       ]
     },
@@ -123,17 +131,24 @@
         {
           "action": "highlight",
           "path": ".demo/temp-files/1.cs",
-          "position": "14:23",
+          "position": "11:24",
           "highlightWholeLine": true
         }
       ]
     },
     {
       "id": "scene-mk482gb3-e2g0",
-      "title": "Reset zoom",
+      "title": "Reset vscode",
       "steps": [
         {
           "action": "zoomReset"
+        },
+        {
+          "action": "setSetting",
+          "setting": {
+            "key": "editor.codeLens",
+            "value": true
+          }
         }
       ]
     },
@@ -144,6 +159,16 @@
         {
           "action": "openSlide",
           "path": ".demo/slides/ending.md"
+        }
+      ]
+    },
+    {
+      "id": "scene-mk5p9v6w-p313",
+      "title": "testSlide",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/testslide.md"
         }
       ]
     }
