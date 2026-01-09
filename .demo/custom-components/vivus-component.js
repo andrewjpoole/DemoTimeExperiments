@@ -2,7 +2,7 @@ import Vivus from 'https://esm.run/vivus';
 
 class VivusComponentElement extends HTMLElement {
   static get observedAttributes() {
-    return ['svg-file-path', 'animation-type', 'animation-speed', 'width', 'height', 'background-color', 'border', 'invert-colours'];
+    return ['svg-file-path', 'animation-type', 'animation-speed', 'width', 'height', 'background-color', 'border', 'invert-colours', 'auto-play'];
   }
 
   constructor() {
@@ -13,7 +13,7 @@ class VivusComponentElement extends HTMLElement {
   }
 
   connectedCallback() {
-    console.log('VivusComponent v3.4 - Controls Overlay');
+    console.log('VivusComponent v3.6 - Conditional Controls Visibility');
     this._render();
   }
 
@@ -37,6 +37,7 @@ class VivusComponentElement extends HTMLElement {
     const animationType = this.getAttribute('animation-type') || 'oneByOne';
     const animationSpeed = parseInt(this.getAttribute('animation-speed'), 10) || 200;
     const invertColours = this.getAttribute('invert-colours') === 'true';
+    const autoPlay = this.getAttribute('auto-play') !== 'false'; // Defaults to true
     
     this.style.display = 'inline-block';
     this.style.boxSizing = 'border-box';
@@ -72,6 +73,10 @@ class VivusComponentElement extends HTMLElement {
         }
         .wrapper:hover .controls-overlay,
         .controls-overlay:hover { /* Ensure it stays visible when interacting */
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .controls-overlay.force-visible {
             opacity: 1;
             pointer-events: auto;
         }
@@ -126,6 +131,9 @@ class VivusComponentElement extends HTMLElement {
     // --- Controls ---
     const controls = document.createElement('div');
     controls.className = 'controls-overlay';
+    if (!autoPlay) {
+        controls.classList.add('force-visible');
+    }
     
     // Icons (Material Design style)
     const iconStart = `<svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>`; // Skip Previous
@@ -142,8 +150,8 @@ class VivusComponentElement extends HTMLElement {
     // Play/Pause Button
     const btnPlayPause = document.createElement('button');
     btnPlayPause.className = 'control-btn';
-    btnPlayPause.innerHTML = iconPause; // Default is playing
-    btnPlayPause.title = 'Pause';
+    btnPlayPause.innerHTML = autoPlay ? iconPause : iconPlay; 
+    btnPlayPause.title = autoPlay ? 'Pause' : 'Play';
 
     // End Button
     const btnEnd = document.createElement('button');
@@ -158,7 +166,7 @@ class VivusComponentElement extends HTMLElement {
 
     // Vivus Instance holder
     let myVivusInstance = null;
-    let isPlaying = true;
+    let isPlaying = autoPlay;
 
     const updatePlayButton = () => {
         btnPlayPause.innerHTML = isPlaying ? iconPause : iconPlay;
@@ -189,6 +197,7 @@ class VivusComponentElement extends HTMLElement {
 
     btnPlayPause.onclick = (e) => {
         e.stopPropagation();
+        controls.classList.remove('force-visible'); // Hide permanent overlay on first interaction
         if (myVivusInstance) {
             if (isPlaying) {
                 myVivusInstance.stop();
@@ -213,6 +222,7 @@ class VivusComponentElement extends HTMLElement {
                 type: animationType,
                 duration: animationSpeed,
                 file: filePath,
+                start: 'manual', // We control the start
                 onReady: (myVivus) => {
                     // Capture instance
                     myVivusInstance = myVivus;
@@ -267,7 +277,10 @@ class VivusComponentElement extends HTMLElement {
                         myVivus.el.removeAttribute('width');
                         myVivus.el.removeAttribute('height');
                     }
-                    myVivus.play(myVivus.getStatus() === 'end' ? -1 : 1);
+                    
+                    if (autoPlay) {
+                        myVivus.play(myVivus.getStatus() === 'end' ? -1 : 1);
+                    }
                 }
             });
         } catch (e) {

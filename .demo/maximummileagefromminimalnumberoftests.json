@@ -171,6 +171,16 @@
           "path": ".demo/slides/testslide.md"
         }
       ]
+    },
+    {
+      "id": "scene-mk6t8c9a-mgs7",
+      "title": "testSlide3",
+      "steps": [
+        {
+          "action": "openSlide",
+          "path": ".demo/slides/testslide3.md"
+        }
+      ]
     }
   ],
   "description": "testing DemoTime for the code demos from my talk"

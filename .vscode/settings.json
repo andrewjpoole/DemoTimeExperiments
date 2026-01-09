@@ -2,7 +2,8 @@
     "demoTime.customWebComponents": [
         ".demo/custom-components/highlight.js",
         ".demo/custom-components/video-component.js",
-        ".demo/custom-components/vivus-component.js"
+        ".demo/custom-components/vivus-component.js",
+        ".demo/custom-components/animate-svg-component.js"
     ],
     "workbench.statusBar.visible": true,
     "workbench.editor.showTabs": "multiple",
