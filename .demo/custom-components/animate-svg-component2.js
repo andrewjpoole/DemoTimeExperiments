@@ -25,6 +25,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._animationFrameId = null;
     this._timedPauseTimeout = null;
     this._currentPauseIndex = 0;
+    this._currentSegmentIndex = 0;
     this._isPlaying = false;
     this._isFinished = false;
     this._elapsedBeforePause = 0;
@@ -398,6 +399,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._totalLength = cumulativeLength > 0 ? cumulativeLength : 1;
     this._paths = animEntries;
     this._elementSegments = elementSegments;
+    this._currentSegmentIndex = 0;
     this._duration = (this._totalLength / this._speed) * 1000;
     if (!isFinite(this._duration) || this._duration <= 0) {
       this._duration = 2000;
@@ -664,6 +666,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._currentPauseIndex = 0;
     this._pendingManualResume = false;
     this._pausePoints.forEach((point) => (point.triggered = false));
+    this._currentSegmentIndex = 0;
     this._draw(0);
     this._showControls(this._autoPlay === false);
   }
@@ -673,30 +676,45 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._draw(1);
     this._isFinished = true;
     this._elapsedBeforePause = this._duration;
+    this._currentSegmentIndex = this._paths.length;
     this._showControls(true);
   }
 
   _draw(progress) {
     const currentLength = this._totalLength * progress;
-    this._paths.forEach((segment) => {
-      if (segment.isText) {
-        if (currentLength >= segment.endAt) {
+    while (
+      this._currentSegmentIndex < this._paths.length &&
+      currentLength >= this._paths[this._currentSegmentIndex].endAt
+    ) {
+      this._currentSegmentIndex += 1;
+    }
+
+    this._paths.forEach((segment, index) => {
+      if (index < this._currentSegmentIndex) {
+        if (segment.isText) {
           segment.el.style.fillOpacity = '1';
-        } else if (currentLength <= segment.startAt) {
+        } else {
+          segment.el.style.strokeDashoffset = '0';
+        }
+        return;
+      }
+
+      if (index > this._currentSegmentIndex) {
+        if (segment.isText) {
           segment.el.style.fillOpacity = '0';
         } else {
-          segment.el.style.fillOpacity = '1';
-        }
-      } else {
-        if (currentLength >= segment.endAt) {
-          segment.el.style.strokeDashoffset = '0';
-        } else if (currentLength <= segment.startAt) {
           segment.el.style.strokeDashoffset = `${segment.length}`;
-        } else {
-          const drawn = currentLength - segment.startAt;
-          const offset = Math.max(segment.length - drawn, 0);
-          segment.el.style.strokeDashoffset = `${offset}`;
         }
+        return;
+      }
+
+      // index === current segment
+      if (segment.isText) {
+        segment.el.style.fillOpacity = currentLength >= segment.endAt ? '1' : '0';
+      } else {
+        const drawn = Math.max(0, Math.min(segment.length, currentLength - segment.startAt));
+        const offset = Math.max(segment.length - drawn, 0);
+        segment.el.style.strokeDashoffset = `${offset}`;
       }
     });
   }
