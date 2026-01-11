@@ -3,7 +3,7 @@
         ".demo/custom-components/highlight.js",
         ".demo/custom-components/video-component.js",
         ".demo/custom-components/vivus-component.js",
-        ".demo/custom-components/animate-svg-component.js"
+        ".demo/custom-components/animate-svg-component2.js"
     ],
     "workbench.statusBar.visible": true,
     "workbench.editor.showTabs": "multiple",
@@ -14,5 +14,6 @@
     "demoTime.highlightOpacity": 0.65,
     "demoTime.highlightBlur": 1,
     "demoTime.customTheme": "",
-    "editor.codeLens": true
+    "editor.codeLens": true,
+    "svg.preview.background": "transparent"
 }

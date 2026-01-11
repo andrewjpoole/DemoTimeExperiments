@@ -1,0 +1,733 @@
+class SimpleAnimateSvgComponent extends HTMLElement {
+  static get observedAttributes() {
+    return [
+      'svg-file-path',
+      'animation-speed',
+      'width',
+      'height',
+      'sizing',
+      'background-color',
+      'border',
+      'invert-colors',
+      'auto-play'
+    ];
+  }
+
+  constructor() {
+    super();
+    this._shadow = this.attachShadow({ mode: 'open' });
+    this._container = document.createElement('div');
+    this._shadow.appendChild(this._container);
+
+    this._paths = [];
+    this._elementSegments = [];
+    this._pausePoints = [];
+    this._animationFrameId = null;
+    this._timedPauseTimeout = null;
+    this._currentPauseIndex = 0;
+    this._isPlaying = false;
+    this._isFinished = false;
+    this._elapsedBeforePause = 0;
+    this._startTime = null;
+    this._totalLength = 1;
+    this._speed = 100;
+    this._duration = 2000;
+    this._pendingManualResume = false;
+    this._autoPlay = true;
+    this._intersectionObserver = null;
+    this._wasVisible = false;
+    this._hasAutoPlayed = false;
+    this._isReadyForVisibility = false;
+    this._slowDraw = false;
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  disconnectedCallback() {
+    this._cancelAnimation();
+    if (this._intersectionObserver) {
+      this._intersectionObserver.disconnect();
+      this._intersectionObserver = null;
+    }
+    if (this._timedPauseTimeout) {
+      clearTimeout(this._timedPauseTimeout);
+      this._timedPauseTimeout = null;
+    }
+  }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (oldValue !== newValue) {
+      this._render();
+    }
+  }
+
+  _render() {
+    this._cancelAnimation();
+    this._isReadyForVisibility = false;
+    this._hasAutoPlayed = false;
+    this._elapsedBeforePause = 0;
+    this._currentPauseIndex = 0;
+    this._pendingManualResume = false;
+    this._paths = [];
+    this._elementSegments = [];
+    this._pausePoints = [];
+    this._totalLength = 1;
+    this._container.innerHTML = '';
+
+    const width = this.getAttribute('width') || '100%';
+    const height = this.getAttribute('height');
+    const sizing = (this.getAttribute('sizing') || 'fill').toLowerCase();
+    const backgroundColor = this.getAttribute('background-color');
+    const border = this.getAttribute('border');
+    const filePath = this.getAttribute('svg-file-path');
+    const invertColors = this.getAttribute('invert-colors') === 'true';
+    const autoPlayAttr = this.getAttribute('auto-play');
+    this._autoPlay = autoPlayAttr !== 'false';
+
+    const speed = parseInt(this.getAttribute('animation-speed'), 10);
+    this._speed = Number.isNaN(speed) ? 100 : Math.max(1, speed);
+
+    this.style.display = 'inline-block';
+    this.style.boxSizing = 'border-box';
+    this.style.width = width;
+    this.style.height = sizing === 'fill' ? '100%' : height || 'auto';
+    this.style.padding = '0';
+    this.style.margin = '0';
+    this.style.lineHeight = '0';
+    this.style.verticalAlign = 'top';
+    if (backgroundColor) this.style.backgroundColor = backgroundColor;
+    if (border) this.style.border = border;
+
+    if (sizing === 'fill') {
+      this.style.position = 'absolute';
+      this.style.top = '0';
+      this.style.left = '0';
+      this.style.width = '100%';
+      this.style.height = '100%';
+      this.style.overflow = 'hidden';
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+      :host {
+        contain: layout style;
+      }
+      .wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .svg-content {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .controls-overlay {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        display: flex;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(16, 16, 16, 0.65);
+        color: #fff;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        align-items: center;
+        backdrop-filter: blur(4px);
+        z-index: 10;
+      }
+      .wrapper:hover .controls-overlay,
+      .controls-overlay.force-visible,
+      .controls-overlay:hover {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .control-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 0.15s, background 0.15s;
+      }
+      .control-btn:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+      .control-btn:hover {
+        transform: scale(1.1);
+      }
+      .control-btn svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+      .loading-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 40px;
+        height: 40px;
+        margin-left: -20px;
+        margin-top: -20px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        z-index: 5;
+      }
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      svg .finished path,
+      svg .finished line,
+      svg .finished polyline,
+      svg .finished polygon,
+      svg .finished rect,
+      svg .finished circle,
+      svg .finished ellipse {
+        fill-opacity: 1 !important;
+      }
+    `;
+    this._container.appendChild(style);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wrapper';
+
+    this._svgWrapper = document.createElement('div');
+    this._svgWrapper.className = 'svg-content';
+    wrapper.appendChild(this._svgWrapper);
+
+    this._spinner = document.createElement('div');
+    this._spinner.className = 'loading-spinner';
+    wrapper.appendChild(this._spinner);
+
+    this._controlsOverlay = document.createElement('div');
+    this._controlsOverlay.className = 'controls-overlay';
+    wrapper.appendChild(this._controlsOverlay);
+
+    this._container.appendChild(wrapper);
+
+    this._setupControls();
+
+    if (!filePath) {
+      this._showMessage('svg-file-path attribute is required');
+      return;
+    }
+
+    this._loadSvg(filePath, { sizing, width, invertColors, autoPlay: this._autoPlay });
+  }
+
+  _showMessage(message) {
+    const notice = document.createElement('div');
+    notice.style.padding = '12px';
+    notice.style.color = '#fff';
+    notice.style.fontSize = '14px';
+    notice.innerText = message;
+    this._svgWrapper.innerHTML = '';
+    this._svgWrapper.appendChild(notice);
+  }
+
+  _setupControls() {
+    this._controlsOverlay.innerHTML = '';
+    const icons = {
+      start: '<svg viewBox="0 0 24 24"><path d="M6 18V6l9 6-9 6zm10 0V6h2v12h-2z"/></svg>',
+      play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+      pause: '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>',
+      end: '<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6zm9 0V6l8.5 6z"/></svg>'
+    };
+
+    this._btnStart = document.createElement('button');
+    this._btnStart.className = 'control-btn';
+    this._btnStart.title = 'Restart';
+    this._btnStart.innerHTML = icons.start;
+    this._btnStart.onclick = (event) => {
+      event.stopPropagation();
+      this._reset();
+      this._play();
+    };
+
+    this._btnPlayPause = document.createElement('button');
+    this._btnPlayPause.className = 'control-btn';
+    this._btnPlayPause.title = 'Play';
+    this._btnPlayPause.innerHTML = icons.play;
+    this._btnPlayPause.onclick = (event) => {
+      event.stopPropagation();
+      if (this._isPlaying) {
+        this._pause();
+      } else {
+        this._play();
+      }
+    };
+
+    this._btnEnd = document.createElement('button');
+    this._btnEnd.className = 'control-btn';
+    this._btnEnd.title = 'Finish';
+    this._btnEnd.innerHTML = icons.end;
+    this._btnEnd.onclick = (event) => {
+      event.stopPropagation();
+      this._finish();
+    };
+
+    this._controlsOverlay.appendChild(this._btnStart);
+    this._controlsOverlay.appendChild(this._btnPlayPause);
+    this._controlsOverlay.appendChild(this._btnEnd);
+    this._updatePlayButtonIcon();
+  }
+
+  async _loadSvg(filePath, options) {
+    try {
+      const response = await fetch(filePath);
+      if (!response.ok) throw new Error('Unable to fetch SVG');
+      const svgText = await response.text();
+      this._pauseComments = this._parsePauseComments(svgText);
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgText, 'image/svg+xml');
+      const svgEl = doc.querySelector('svg');
+      if (!svgEl) throw new Error('SVG tag not found');
+      this._svgWrapper.innerHTML = '';
+      this._svgWrapper.appendChild(svgEl);
+      this._applySizing(svgEl, options.sizing, options.width);
+      if (options.invertColors) {
+        this._invertColors(svgEl);
+      }
+      this._prepareAnimation(svgEl, svgText);
+      this._isReadyForVisibility = true;
+      this._setupVisibilityObserver();
+      if (!this._autoPlay) {
+        this._draw(0);
+      }
+    } catch (error) {
+      this._showMessage('Error loading SVG');
+      console.error(error);
+    } finally {
+      if (this._spinner) {
+        this._spinner.remove();
+        this._spinner = null;
+      }
+    }
+  }
+
+  _applySizing(svgEl, sizing, width) {
+    const padding = 20;
+    let bbox;
+    try {
+      bbox = svgEl.getBBox();
+    } catch {
+      bbox = { x: 0, y: 0, width: 0, height: 0 };
+    }
+    if (!svgEl.hasAttribute('viewBox')) {
+      if (bbox.width && bbox.height) {
+        svgEl.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${bbox.width + padding * 2} ${bbox.height + padding * 2}`);
+      } else {
+        const w = parseFloat(svgEl.getAttribute('width')) || 100;
+        const h = parseFloat(svgEl.getAttribute('height')) || 100;
+        svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      }
+    }
+    if (sizing === 'fill') {
+      svgEl.removeAttribute('width');
+      svgEl.removeAttribute('height');
+      svgEl.style.width = '100%';
+      svgEl.style.height = '100%';
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.maxHeight = '100%';
+      svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    } else if (sizing === 'exact') {
+      svgEl.style.width = width;
+      svgEl.style.height = 'auto';
+      svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    } else if (sizing === 'none') {
+      const targetWidth = (bbox.width || 100) + padding * 2;
+      const targetHeight = (bbox.height || 100) + padding * 2;
+      svgEl.style.width = `${targetWidth}px`;
+      svgEl.style.height = `${targetHeight}px`;
+      svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }
+
+  _prepareAnimation(svgEl, svgText) {
+    const drawablePositions = this._extractDrawablePositions(svgText);
+    const nodes = Array.from(svgEl.querySelectorAll('path, line, polyline, polygon, rect, circle, ellipse, text'));
+    let cumulativeLength = 0;
+    const animEntries = [];
+    const elementSegments = [];
+
+    nodes.forEach((node) => {
+      const tag = node.tagName.toLowerCase();
+      const startAt = cumulativeLength;
+      let length = 0;
+
+      if (tag === 'text') {
+        const { entries, totalLength } = this._processTextElement(node, cumulativeLength);
+        entries.forEach((entry) => animEntries.push(entry));
+        length = totalLength;
+      } else if (typeof node.getTotalLength === 'function') {
+        try {
+          length = node.getTotalLength();
+        } catch {
+          length = 0;
+        }
+        if (length > 0) {
+          animEntries.push({
+            el: node,
+            length,
+            startAt: cumulativeLength,
+            endAt: cumulativeLength + length,
+            isText: false
+          });
+          node.style.fillOpacity = node.style.fillOpacity || '0';
+          node.style.strokeOpacity = node.style.strokeOpacity || '1';
+        }
+      }
+
+      const endAt = cumulativeLength + length;
+      elementSegments.push({ startAt, endAt, tag });
+      cumulativeLength = endAt;
+    });
+
+    this._totalLength = cumulativeLength > 0 ? cumulativeLength : 1;
+    this._paths = animEntries;
+    this._elementSegments = elementSegments;
+    this._duration = (this._totalLength / this._speed) * 1000;
+    if (!isFinite(this._duration) || this._duration <= 0) {
+      this._duration = 2000;
+    }
+
+    this._paths.forEach((segment) => {
+      if (!segment.isText) {
+        const len = segment.length;
+        segment.el.style.strokeDasharray = `${len} ${len}`;
+        segment.el.style.strokeDashoffset = `${len}`;
+        segment.el.style.transition = 'stroke-dashoffset 0.1s linear';
+      } else {
+        segment.el.style.fillOpacity = '0';
+        segment.el.style.transition = 'fill-opacity 0.15s linear';
+      }
+    });
+
+    this._pausePoints = this._mapCommentsToPausePoints(
+      this._pauseComments,
+      drawablePositions,
+      elementSegments,
+      this._totalLength
+    );
+  }
+
+  _processTextElement(textEl, startAt) {
+    const text = textEl.textContent || '';
+    textEl.textContent = '';
+    const characters = Array.from(text);
+    const computedStyle = window.getComputedStyle(textEl);
+    const entries = [];
+    let cursor = startAt;
+
+    characters.forEach((char, index) => {
+      const displayChar = char === ' ' ? '\u00A0' : char;
+      const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspan.textContent = displayChar;
+      if (index === 0) {
+        const attrs = ['x', 'y', 'dx', 'dy'];
+        attrs.forEach((attr) => {
+          const value = textEl.getAttribute(attr);
+          if (value !== null) tspan.setAttribute(attr, value);
+        });
+      }
+      tspan.style.fontFamily = computedStyle.fontFamily;
+      tspan.style.fontSize = computedStyle.fontSize;
+      tspan.style.fontWeight = computedStyle.fontWeight;
+      tspan.style.fontStyle = computedStyle.fontStyle;
+      tspan.style.fill = computedStyle.fill || computedStyle.color || '#000';
+      tspan.style.stroke = computedStyle.stroke || 'none';
+      tspan.style.strokeWidth = computedStyle.strokeWidth;
+      tspan.style.fillOpacity = '0';
+      tspan.style.transition = 'fill-opacity 0.15s linear';
+      textEl.appendChild(tspan);
+
+      const charLength = Math.max(tspan.getComputedTextLength(), 1);
+      entries.push({
+        el: tspan,
+        length: charLength,
+        startAt: cursor,
+        endAt: cursor + charLength,
+        isText: true
+      });
+      cursor += charLength;
+    });
+
+    return { entries, totalLength: cursor - startAt };
+  }
+
+  _mapCommentsToPausePoints(comments, drawables, segments, totalLength) {
+    if (!comments || !comments.length) return [];
+    const points = [];
+
+    comments.forEach((comment) => {
+      const indexBefore = drawables.filter((item) => item.index < comment.index).length;
+      let progress = 0;
+      if (segments.length && totalLength > 0) {
+        if (indexBefore <= 0) {
+          progress = 0;
+        } else if (indexBefore >= segments.length) {
+          progress = 1;
+        } else {
+          progress = segments[indexBefore - 1].endAt / totalLength;
+        }
+      }
+      points.push({
+        progress: Math.min(1, Math.max(0, progress)),
+        type: comment.type,
+        duration: comment.duration,
+        triggered: false
+      });
+    });
+
+    points.sort((a, b) => a.progress - b.progress);
+    return points;
+  }
+
+  _extractDrawablePositions(svgText) {
+    const regex = /<(path|line|polyline|polygon|rect|circle|ellipse|text)(\s[^>]*)*>/g;
+    const positions = [];
+    let match;
+    while ((match = regex.exec(svgText)) !== null) {
+      positions.push({ index: match.index, tag: match[1] });
+    }
+    return positions;
+  }
+
+  _parsePauseComments(svgText) {
+    const pattern = /<!--\s*Pause:(UntilPlay|(\d+))\s*-->/g;
+    const pauses = [];
+    let match;
+    while ((match = pattern.exec(svgText)) !== null) {
+      if (match[1] === 'UntilPlay') {
+        pauses.push({ type: 'manual', duration: 0, index: match.index });
+      } else if (match[2]) {
+        pauses.push({ type: 'timed', duration: parseFloat(match[2]) * 1000, index: match.index });
+      }
+    }
+    return pauses;
+  }
+
+  _invertColors(svgEl) {
+    const elements = svgEl.querySelectorAll('path, line, polyline, polygon, rect, circle, ellipse, text, tspan');
+    elements.forEach((element) => {
+      const style = window.getComputedStyle(element);
+      this._invertIfGrayscale(element, 'stroke', style.stroke);
+      this._invertIfGrayscale(element, 'fill', style.fill);
+    });
+  }
+
+  _invertIfGrayscale(el, property, color) {
+    if (!color || color === 'none' || color === 'transparent') return;
+    const rgb = this._parseRgbColor(color);
+    if (!rgb) return;
+    const { r, g, b } = rgb;
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 30) {
+      el.style[property] = `rgb(${255 - r}, ${255 - g}, ${255 - b})`;
+    }
+  }
+
+  _parseRgbColor(color) {
+    const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgbMatch) {
+      return {
+        r: parseInt(rgbMatch[1], 10),
+        g: parseInt(rgbMatch[2], 10),
+        b: parseInt(rgbMatch[3], 10)
+      };
+    }
+
+    const hexMatch = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hexMatch) {
+      let hex = hexMatch[1];
+      if (hex.length === 3) {
+        hex = hex.split('').map((h) => h + h).join('');
+      }
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16)
+      };
+    }
+
+    return null;
+  }
+
+  _setupVisibilityObserver() {
+    if (!this._autoPlay) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    if (this._intersectionObserver) {
+      this._intersectionObserver.disconnect();
+      this._intersectionObserver = null;
+    }
+    this._intersectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => this._handleVisibility(entry));
+    }, { threshold: 0.2 });
+    this._intersectionObserver.observe(this);
+  }
+
+  _handleVisibility(entry) {
+    if (!this._autoPlay || !this._isReadyForVisibility) return;
+    if (entry.isIntersecting) {
+      if (!this._wasVisible) {
+        this._wasVisible = true;
+        if (!this._hasAutoPlayed) {
+          this._play();
+        } else {
+          this._reset();
+          this._play();
+        }
+        this._hasAutoPlayed = true;
+      }
+    } else if (this._wasVisible) {
+      this._wasVisible = false;
+      if (this._isPlaying) {
+        this._pause();
+      }
+    }
+  }
+
+  _play() {
+    if (!this._paths.length || this._isPlaying) return;
+    if (this._isFinished) {
+      this._reset();
+    }
+    if (this._pendingManualResume) {
+      this._currentPauseIndex += 1;
+      this._pendingManualResume = false;
+    }
+    this._cancelAnimation();
+    this._isPlaying = true;
+    this._startTime = performance.now() - this._elapsedBeforePause;
+    const drawFrame = (time) => {
+      if (!this._isPlaying) return;
+      const elapsed = time - this._startTime;
+      let progress = elapsed / this._duration;
+      if (progress >= 1) {
+        this._finish();
+        return;
+      }
+      progress = Math.max(0, Math.min(progress, 1));
+      if (this._currentPauseIndex < this._pausePoints.length) {
+        const pause = this._pausePoints[this._currentPauseIndex];
+        if (!pause.triggered && progress >= pause.progress) {
+          pause.triggered = true;
+          if (pause.type === 'timed') {
+            this._pause();
+            this._currentPauseIndex += 1;
+            this._timedPauseTimeout = setTimeout(() => {
+              this._timedPauseTimeout = null;
+              this._play();
+            }, pause.duration);
+          } else {
+            this._pause();
+            this._pendingManualResume = true;
+            this._showControls(true);
+          }
+          return;
+        }
+      }
+      this._draw(progress);
+      this._animationFrameId = requestAnimationFrame(drawFrame);
+    };
+    this._showControls(false);
+    this._animationFrameId = requestAnimationFrame(drawFrame);
+    this._updatePlayButtonIcon();
+  }
+
+  _pause() {
+    if (!this._isPlaying) return;
+    this._isPlaying = false;
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = null;
+    }
+    this._elapsedBeforePause = performance.now() - this._startTime;
+    this._updatePlayButtonIcon();
+  }
+
+  _reset() {
+    this._pause();
+    this._isFinished = false;
+    this._elapsedBeforePause = 0;
+    this._currentPauseIndex = 0;
+    this._pendingManualResume = false;
+    this._pausePoints.forEach((point) => (point.triggered = false));
+    this._draw(0);
+    this._showControls(this._autoPlay === false);
+  }
+
+  _finish() {
+    this._pause();
+    this._draw(1);
+    this._isFinished = true;
+    this._elapsedBeforePause = this._duration;
+    this._showControls(true);
+  }
+
+  _draw(progress) {
+    const currentLength = this._totalLength * progress;
+    this._paths.forEach((segment) => {
+      if (segment.isText) {
+        if (currentLength >= segment.endAt) {
+          segment.el.style.fillOpacity = '1';
+        } else if (currentLength <= segment.startAt) {
+          segment.el.style.fillOpacity = '0';
+        } else {
+          segment.el.style.fillOpacity = '1';
+        }
+      } else {
+        if (currentLength >= segment.endAt) {
+          segment.el.style.strokeDashoffset = '0';
+        } else if (currentLength <= segment.startAt) {
+          segment.el.style.strokeDashoffset = `${segment.length}`;
+        } else {
+          const drawn = currentLength - segment.startAt;
+          const offset = Math.max(segment.length - drawn, 0);
+          segment.el.style.strokeDashoffset = `${offset}`;
+        }
+      }
+    });
+  }
+
+  _cancelAnimation() {
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = null;
+    }
+    if (this._timedPauseTimeout) {
+      clearTimeout(this._timedPauseTimeout);
+      this._timedPauseTimeout = null;
+    }
+  }
+
+  _updatePlayButtonIcon() {
+    if (!this._btnPlayPause) return;
+    this._btnPlayPause.innerHTML = this._isPlaying ? '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+    this._btnPlayPause.title = this._isPlaying ? 'Pause' : 'Play';
+  }
+
+  _showControls(forceVisible) {
+    if (!this._controlsOverlay) return;
+    if (forceVisible) {
+      this._controlsOverlay.classList.add('force-visible');
+    } else {
+      this._controlsOverlay.classList.remove('force-visible');
+    }
+  }
+}
+
+if (!customElements.get('simple-animate-svg-component')) {
+  customElements.define('simple-animate-svg-component', SimpleAnimateSvgComponent);
+}
