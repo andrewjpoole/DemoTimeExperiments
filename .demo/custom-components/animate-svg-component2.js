@@ -182,21 +182,6 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         height: 18px;
         fill: currentColor;
       }
-      .loading-spinner {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 40px;
-        height: 40px;
-        margin-left: -20px;
-        margin-top: -20px;
-        border: 4px solid rgba(255, 255, 255, 0.3);
-        border-top-color: #fff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        z-index: 5;
-      }
-      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       svg .finished path,
       svg .finished line,
       svg .finished polyline,
@@ -216,10 +201,6 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._svgWrapper = document.createElement('div');
     this._svgWrapper.className = 'svg-content';
     wrapper.appendChild(this._svgWrapper);
-
-    this._spinner = document.createElement('div');
-    this._spinner.className = 'loading-spinner';
-    wrapper.appendChild(this._spinner);
 
     this._controlsOverlay = document.createElement('div');
     this._controlsOverlay.className = 'controls-overlay';
@@ -250,10 +231,10 @@ class SimpleAnimateSvgComponent extends HTMLElement {
   _setupControls() {
     this._controlsOverlay.innerHTML = '';
     const icons = {
-      start: '<svg viewBox="0 0 24 24"><path d="M6 18V6l9 6-9 6zm10 0V6h2v12h-2z"/></svg>',
+      start: '<svg viewBox="0 0 24 24"><g transform="translate(24 0) scale(-1 1)"><path d="M6 6v12l10-6z"/><path d="M18 6h2v12h-2z"/></g></svg>',
       play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
       pause: '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>',
-      end: '<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6zm9 0V6l8.5 6z"/></svg>'
+      end: '<svg viewBox="0 0 24 24"><path d="M6 6v12l10-6z"/><path d="M18 6h2v12h-2z"/></svg>'
     };
 
     this._btnStart = document.createElement('button');
@@ -336,11 +317,6 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     } catch (error) {
       this._showMessage('Error loading SVG');
       console.error(error);
-    } finally {
-      if (this._spinner) {
-        this._spinner.remove();
-        this._spinner = null;
-      }
     }
   }
 
