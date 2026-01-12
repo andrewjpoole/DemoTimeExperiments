@@ -33,13 +33,16 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._totalLength = 1;
     this._speed = 100;
     this._duration = 2000;
-    this._pendingManualResume = false;
     this._autoPlay = true;
     this._intersectionObserver = null;
     this._wasVisible = false;
     this._hasAutoPlayed = false;
     this._isReadyForVisibility = false;
     this._slowDraw = false;
+    this._speedHints = [];
+    this._waitingForManualResume = false;
+    this._wrapper = null;
+    this._parseWarningBanner = null;
   }
 
   connectedCallback() {
@@ -69,13 +72,18 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._isReadyForVisibility = false;
     this._hasAutoPlayed = false;
     this._elapsedBeforePause = 0;
-    this._currentPauseIndex = 0;
-    this._pendingManualResume = false;
     this._paths = [];
     this._elementSegments = [];
     this._pausePoints = [];
+    this._waitingForManualResume = false;
+    this._speedHints = [];
     this._totalLength = 1;
     this._container.innerHTML = '';
+    this._container.style.position = 'relative';
+    if (this._parseWarningBanner) {
+      this._parseWarningBanner.remove();
+      this._parseWarningBanner = null;
+    }
 
     const width = this.getAttribute('width') || '100%';
     const height = this.getAttribute('height');
@@ -203,6 +211,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'wrapper';
+    this._wrapper = wrapper;
 
     this._svgWrapper = document.createElement('div');
     this._svgWrapper.className = 'svg-content';
@@ -291,8 +300,25 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       if (!response.ok) throw new Error('Unable to fetch SVG');
       const svgText = await response.text();
       this._pauseComments = this._parsePauseComments(svgText);
+      this._speedHints = this._parseSpeedHints(svgText);
       const parser = new DOMParser();
       const doc = parser.parseFromString(svgText, 'image/svg+xml');
+      const parserError = doc.querySelector('parsererror');
+      if (parserError) {
+        let detail = parserError.textContent?.trim() || 'Unknown parse error';
+        const lower = detail.toLowerCase();
+        const firstOp = lower.indexOf('error on line');
+        if (firstOp >= 0) {
+          const secondOp = lower.indexOf('error on line', firstOp + 1);
+          if (secondOp >= 0) {
+            detail = detail.slice(0, secondOp).trim();
+          }
+        }
+        const message = `SVG parse error: ${detail}`;
+        console.error(`[AnimateSvg] ${message}`);
+        this._showParseWarningBanner(message);
+        throw new Error(message);
+      }
       const svgEl = doc.querySelector('svg');
       if (!svgEl) throw new Error('SVG tag not found');
       this._svgWrapper.innerHTML = '';
@@ -358,20 +384,35 @@ class SimpleAnimateSvgComponent extends HTMLElement {
 
   _prepareAnimation(svgEl, svgText) {
     const drawablePositions = this._extractDrawablePositions(svgText);
+    const speedHints = this._speedHints || [];
     const nodes = Array.from(svgEl.querySelectorAll('path, line, polyline, polygon, rect, circle, ellipse, text'));
     let cumulativeLength = 0;
+    let cumulativeTime = 0;
+    let hintIndex = 0;
+    let currentMultiplier = 1;
     const animEntries = [];
     const elementSegments = [];
 
-    nodes.forEach((node) => {
+    nodes.forEach((node, idx) => {
       const tag = node.tagName.toLowerCase();
+      const drawableInfo = drawablePositions[idx] || { index: Number.MAX_SAFE_INTEGER };
+      while (hintIndex < speedHints.length && speedHints[hintIndex].index <= drawableInfo.index) {
+        const hint = speedHints[hintIndex];
+        currentMultiplier = hint.multiplier;
+        hintIndex += 1;
+      }
+
+      const effectiveSpeed = Math.max(this._speed * currentMultiplier, 0.0001);
       const startAt = cumulativeLength;
+      const startTime = cumulativeTime;
       let length = 0;
+      let nodeDuration = 0;
 
       if (tag === 'text') {
-        const { entries, totalLength } = this._processTextElement(node, cumulativeLength);
+        const { entries, totalLength, totalDuration } = this._processTextElement(node, cumulativeLength, startTime, this._speed, currentMultiplier);
         entries.forEach((entry) => animEntries.push(entry));
         length = totalLength;
+        nodeDuration = totalDuration;
       } else if (typeof node.getTotalLength === 'function') {
         try {
           length = node.getTotalLength();
@@ -379,31 +420,41 @@ class SimpleAnimateSvgComponent extends HTMLElement {
           length = 0;
         }
         if (length > 0) {
+          const segmentDuration = (length / effectiveSpeed) * 1000;
+          const segmentStartTime = startTime;
+          const segmentEndTime = segmentStartTime + segmentDuration;
           animEntries.push({
             el: node,
             length,
-            startAt: cumulativeLength,
-            endAt: cumulativeLength + length,
-            isText: false
+            startAt,
+            endAt: startAt + length,
+            isText: false,
+            duration: segmentDuration,
+            startTime: segmentStartTime,
+            endTime: segmentEndTime
           });
+          nodeDuration = segmentDuration;
           node.style.fillOpacity = node.style.fillOpacity || '0';
           node.style.strokeOpacity = node.style.strokeOpacity || '1';
         }
       }
 
       const endAt = cumulativeLength + length;
-      elementSegments.push({ startAt, endAt, tag });
+      const endTime = startTime + nodeDuration;
+      elementSegments.push({ startAt, endAt, tag, startTime, endTime });
       cumulativeLength = endAt;
+      cumulativeTime = endTime;
     });
 
     this._totalLength = cumulativeLength > 0 ? cumulativeLength : 1;
     this._paths = animEntries;
     this._elementSegments = elementSegments;
     this._currentSegmentIndex = 0;
-    this._duration = (this._totalLength / this._speed) * 1000;
+    this._duration = cumulativeTime > 0 ? cumulativeTime : 2000;
     if (!isFinite(this._duration) || this._duration <= 0) {
       this._duration = 2000;
     }
+
 
     this._paths.forEach((segment) => {
       if (!segment.isText) {
@@ -421,25 +472,26 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       this._pauseComments,
       drawablePositions,
       elementSegments,
-      this._totalLength
+      this._duration
     );
   }
 
-  _processTextElement(textEl, startAt) {
+  _processTextElement(textEl, startAt, startTime, baseSpeed, multiplier) {
     const text = textEl.textContent || '';
     textEl.textContent = '';
     const characters = Array.from(text);
     const computedStyle = window.getComputedStyle(textEl);
     const entries = [];
     let cursor = startAt;
+    let currentTime = startTime;
+    const effectiveSpeed = Math.max(baseSpeed * Math.max(multiplier, 0.01), 0.0001);
 
     characters.forEach((char, index) => {
       const displayChar = char === ' ' ? '\u00A0' : char;
       const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
       tspan.textContent = displayChar;
       if (index === 0) {
-        const attrs = ['x', 'y', 'dx', 'dy'];
-        attrs.forEach((attr) => {
+        ['x', 'y', 'dx', 'dy'].forEach((attr) => {
           const value = textEl.getAttribute(attr);
           if (value !== null) tspan.setAttribute(attr, value);
         });
@@ -456,33 +508,39 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       textEl.appendChild(tspan);
 
       const charLength = Math.max(tspan.getComputedTextLength(), 1);
+      const charDuration = (charLength / effectiveSpeed) * 1000;
       entries.push({
         el: tspan,
         length: charLength,
         startAt: cursor,
         endAt: cursor + charLength,
-        isText: true
+        isText: true,
+        startTime: currentTime,
+        endTime: currentTime + charDuration,
+        duration: charDuration
       });
       cursor += charLength;
+      currentTime += charDuration;
     });
 
-    return { entries, totalLength: cursor - startAt };
+    return { entries, totalLength: cursor - startAt, totalDuration: currentTime - startTime };
   }
 
-  _mapCommentsToPausePoints(comments, drawables, segments, totalLength) {
+  _mapCommentsToPausePoints(comments, drawables, segments, totalDuration) {
     if (!comments || !comments.length) return [];
     const points = [];
 
     comments.forEach((comment) => {
       const indexBefore = drawables.filter((item) => item.index < comment.index).length;
       let progress = 0;
-      if (segments.length && totalLength > 0) {
+      if (segments.length && totalDuration > 0) {
         if (indexBefore <= 0) {
           progress = 0;
         } else if (indexBefore >= segments.length) {
           progress = 1;
         } else {
-          progress = segments[indexBefore - 1].endAt / totalLength;
+          const targetSegment = segments[indexBefore - 1];
+          progress = targetSegment ? targetSegment.endTime / totalDuration : 0;
         }
       }
       points.push({
@@ -495,6 +553,20 @@ class SimpleAnimateSvgComponent extends HTMLElement {
 
     points.sort((a, b) => a.progress - b.progress);
     return points;
+  }
+
+  _parseSpeedHints(svgText) {
+    const pattern = /<!--\s*Speed:(\d*\.?\d+)\s*-->/g;
+    const hints = [];
+    let match;
+    while ((match = pattern.exec(svgText)) !== null) {
+      const multiplier = parseFloat(match[1]);
+      if (!Number.isNaN(multiplier)) {
+        hints.push({ index: match.index, multiplier: multiplier });
+      }
+    }
+    hints.sort((a, b) => a.index - b.index);
+    return hints;
   }
 
   _extractDrawablePositions(svgText) {
@@ -605,28 +677,32 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     if (this._isFinished) {
       this._reset();
     }
-    if (this._pendingManualResume) {
-      this._currentPauseIndex += 1;
-      this._pendingManualResume = false;
-    }
     this._cancelAnimation();
     this._isPlaying = true;
     this._startTime = performance.now() - this._elapsedBeforePause;
     const drawFrame = (time) => {
       if (!this._isPlaying) return;
       const elapsed = time - this._startTime;
-      let progress = elapsed / this._duration;
-      if (progress >= 1) {
+      if (elapsed >= this._duration) {
         this._finish();
         return;
       }
-      progress = Math.max(0, Math.min(progress, 1));
+      const clampedElapsed = Math.max(0, elapsed);
+      let progress = clampedElapsed / this._duration;
+      while (
+        this._currentPauseIndex < this._pausePoints.length &&
+        this._pausePoints[this._currentPauseIndex].triggered
+      ) {
+        this._currentPauseIndex += 1;
+      }
       if (this._currentPauseIndex < this._pausePoints.length) {
         const pause = this._pausePoints[this._currentPauseIndex];
         if (!pause.triggered && progress >= pause.progress) {
           pause.triggered = true;
+          const pausedElapsed = Math.max(0, Math.min(elapsed, this._duration));
           if (pause.type === 'timed') {
             this._pause();
+            this._elapsedBeforePause = pausedElapsed;
             this._currentPauseIndex += 1;
             this._timedPauseTimeout = setTimeout(() => {
               this._timedPauseTimeout = null;
@@ -634,13 +710,14 @@ class SimpleAnimateSvgComponent extends HTMLElement {
             }, pause.duration);
           } else {
             this._pause();
-            this._pendingManualResume = true;
+            this._waitingForManualResume = true;
             this._showControls(true);
+            this._updatePlayButtonIcon();
           }
           return;
         }
       }
-      this._draw(progress);
+      this._draw(clampedElapsed);
       this._animationFrameId = requestAnimationFrame(drawFrame);
     };
     this._showControls(false);
@@ -664,27 +741,28 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._isFinished = false;
     this._elapsedBeforePause = 0;
     this._currentPauseIndex = 0;
-    this._pendingManualResume = false;
     this._pausePoints.forEach((point) => (point.triggered = false));
     this._currentSegmentIndex = 0;
     this._draw(0);
     this._showControls(this._autoPlay === false);
+    this._waitingForManualResume = false;
   }
 
   _finish() {
     this._pause();
-    this._draw(1);
+    this._draw(this._duration);
     this._isFinished = true;
     this._elapsedBeforePause = this._duration;
     this._currentSegmentIndex = this._paths.length;
     this._showControls(true);
+    this._waitingForManualResume = false;
   }
 
-  _draw(progress) {
-    const currentLength = this._totalLength * progress;
+  _draw(currentTime) {
+    const time = Math.max(0, Math.min(currentTime, this._duration));
     while (
       this._currentSegmentIndex < this._paths.length &&
-      currentLength >= this._paths[this._currentSegmentIndex].endAt
+      time >= this._paths[this._currentSegmentIndex].endTime
     ) {
       this._currentSegmentIndex += 1;
     }
@@ -708,14 +786,15 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         return;
       }
 
-      // index === current segment
       if (segment.isText) {
-        segment.el.style.fillOpacity = currentLength >= segment.endAt ? '1' : '0';
-      } else {
-        const drawn = Math.max(0, Math.min(segment.length, currentLength - segment.startAt));
-        const offset = Math.max(segment.length - drawn, 0);
-        segment.el.style.strokeDashoffset = `${offset}`;
+        segment.el.style.fillOpacity = time >= segment.endTime ? '1' : '0';
+        return;
       }
+
+      const elapsedInSegment = Math.max(0, Math.min(segment.duration, time - segment.startTime));
+      const segmentProgress = segment.duration > 0 ? elapsedInSegment / segment.duration : time >= segment.endTime ? 1 : 0;
+      const offset = Math.max(segment.length * (1 - segmentProgress), 0);
+      segment.el.style.strokeDashoffset = `${offset}`;
     });
   }
 
@@ -743,6 +822,39 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     } else {
       this._controlsOverlay.classList.remove('force-visible');
     }
+  }
+
+  _showParseWarningBanner(message) {
+    if (!this._container) return;
+    if (this._parseWarningBanner) {
+      this._parseWarningBanner.textContent = message;
+      return;
+    }
+    const banner = document.createElement('div');
+    banner.textContent = message;
+    banner.style.position = 'absolute';
+    banner.style.top = '0';
+    banner.style.left = '0';
+    banner.style.right = '0';
+    banner.style.padding = '6px 12px';
+    banner.style.background = 'rgba(255, 179, 0, 0.95)';
+    banner.style.color = '#1b1b1b';
+    banner.style.fontSize = '11px';
+    banner.style.fontFamily = 'system-ui, sans-serif';
+    banner.style.textAlign = 'center';
+    banner.style.zIndex = '20';
+    banner.style.borderBottomLeftRadius = '8px';
+    banner.style.borderBottomRightRadius = '8px';
+    banner.style.pointerEvents = 'none';
+    banner.style.whiteSpace = 'pre-wrap';
+    banner.style.wordBreak = 'break-word';
+    banner.style.lineHeight = '1.2';
+    banner.style.maxHeight = 'none';
+    banner.style.boxSizing = 'border-box';
+    banner.style.display = 'block';
+    banner.style.margin = '0 auto';
+    this._container.appendChild(banner);
+    this._parseWarningBanner = banner;
   }
 }
 
