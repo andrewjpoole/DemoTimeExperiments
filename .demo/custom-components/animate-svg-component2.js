@@ -1,5 +1,6 @@
 const SLIDE_WIDTH = 960;
 const SLIDE_HEIGHT = 540;
+const TYPEWRITER_SPEED_FACTOR = 0.25;
 
 class SimpleAnimateSvgComponent extends HTMLElement {
   static get observedAttributes() {
@@ -508,7 +509,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     const entries = [];
     let cursor = startAt;
     let currentTime = startTime;
-    const effectiveSpeed = Math.max(baseSpeed * Math.max(multiplier, 0.01), 0.0001);
+    const effectiveSpeed = Math.max(baseSpeed * Math.max(multiplier, 0.01) * TYPEWRITER_SPEED_FACTOR, 0.0001);
 
     characters.forEach((char, index) => {
       const displayChar = char === ' ' ? '\u00A0' : char;

@@ -7,22 +7,12 @@ layout: default
     svg-file-path="https://file+.vscode-resource.vscode-cdn.net/d%3A/git/DemoTimeExperiments/.demo/assets/AnimateYourSvgFiles.svg" 
     background-color="#111"
     invert-colors="true"
-    animation-speed="300" 
+    animation-speed="500" 
     sizing="fill"
     auto-play="true"
     border="2px solid rgb(59, 72, 255)"
     >
 </simple-animate-svg-component>
-
-<!-- <simple-animate-svg-component
-    svg-file-path="https://file+.vscode-resource.vscode-cdn.net/d%3A/git/DemoTimeExperiments/.demo/assets/complex-scenario2.svg" 
-    background-color="white"
-    invert-colors="false"
-    animation-speed="500" 
-    sizing="fill"
-    auto-play="true" 
-    >
-</simple-animate-svg-component> -->
 
 ---
 layout: default
@@ -40,3 +30,16 @@ layout: default
     auto-play="false">
 </simple-animate-svg-component>
 
+---
+layout: default
+---
+
+<simple-animate-svg-component
+    svg-file-path="https://file+.vscode-resource.vscode-cdn.net/d%3A/git/DemoTimeExperiments/.demo/assets/test-trophy2.svg" 
+    background-color="white"
+    invert-colors="false"
+    animation-speed="500" 
+    sizing="fill"
+    auto-play="true" 
+    >
+</simple-animate-svg-component>
