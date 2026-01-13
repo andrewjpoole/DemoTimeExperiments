@@ -264,7 +264,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._btnStart.onclick = (event) => {
       event.stopPropagation();
       this._reset();
-      this._play();
+      this._showControls(true);
     };
 
     this._btnPlayPause = document.createElement('button');
