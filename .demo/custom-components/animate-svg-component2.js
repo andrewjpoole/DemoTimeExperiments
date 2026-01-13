@@ -1,3 +1,6 @@
+const SLIDE_WIDTH = 960;
+const SLIDE_HEIGHT = 540;
+
 class SimpleAnimateSvgComponent extends HTMLElement {
   static get observedAttributes() {
     return [
@@ -80,6 +83,8 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._totalLength = 1;
     this._container.innerHTML = '';
     this._container.style.position = 'relative';
+    this._container.style.width = '100%';
+    this._container.style.height = '100%';
     if (this._parseWarningBanner) {
       this._parseWarningBanner.remove();
       this._parseWarningBanner = null;
@@ -116,6 +121,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       this.style.width = '100%';
       this.style.height = '100%';
       this.style.overflow = 'hidden';
+      this.style.aspectRatio = `${SLIDE_WIDTH}/${SLIDE_HEIGHT}`;
     }
 
     const style = document.createElement('style');
@@ -151,7 +157,8 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         backdrop-filter: blur(4px);
         z-index: 10;
       }
-      .wrapper:hover .controls-overlay,
+      .wrapper:hover + .controls-overlay,
+      :host(:hover) .controls-overlay,
       .controls-overlay.force-visible,
       .controls-overlay:hover {
         opacity: 1;
@@ -201,12 +208,11 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._svgWrapper = document.createElement('div');
     this._svgWrapper.className = 'svg-content';
     wrapper.appendChild(this._svgWrapper);
+    this._container.appendChild(wrapper);
 
     this._controlsOverlay = document.createElement('div');
     this._controlsOverlay.className = 'controls-overlay';
-    wrapper.appendChild(this._controlsOverlay);
-
-    this._container.appendChild(wrapper);
+    this._container.appendChild(this._controlsOverlay);
 
     this._setupControls();
 
@@ -328,15 +334,13 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     } catch {
       bbox = { x: 0, y: 0, width: 0, height: 0 };
     }
-    if (!svgEl.hasAttribute('viewBox')) {
-      if (bbox.width && bbox.height) {
-        svgEl.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${bbox.width + padding * 2} ${bbox.height + padding * 2}`);
-      } else {
-        const w = parseFloat(svgEl.getAttribute('width')) || 100;
-        const h = parseFloat(svgEl.getAttribute('height')) || 100;
-        svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
-      }
-    }
+    const hasBBox = Number.isFinite(bbox.width) && Number.isFinite(bbox.height) && bbox.width > 0 && bbox.height > 0;
+    const viewBoxWidth = hasBBox ? bbox.width : parseFloat(svgEl.getAttribute('width')) || 100;
+    const viewBoxHeight = hasBBox ? bbox.height : parseFloat(svgEl.getAttribute('height')) || 100;
+    const viewBoxX = Number.isFinite(bbox.x) ? bbox.x - padding : 0;
+    const viewBoxY = Number.isFinite(bbox.y) ? bbox.y - padding : 0;
+    const viewBoxString = `${viewBoxX} ${viewBoxY} ${viewBoxWidth + padding * 2} ${viewBoxHeight + padding * 2}`;
+    svgEl.setAttribute('viewBox', viewBoxString);
     if (sizing === 'fill') {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
@@ -356,12 +360,15 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       svgEl.style.height = `${targetHeight}px`;
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     }
+
   }
 
   _prepareAnimation(svgEl, svgText) {
     const drawablePositions = this._extractDrawablePositions(svgText);
     const speedHints = this._speedHints || [];
-    const nodes = Array.from(svgEl.querySelectorAll('path, line, polyline, polygon, rect, circle, ellipse, text'));
+    const nodes = Array.from(
+      svgEl.querySelectorAll('path, line, polyline, polygon, rect, circle, ellipse, text, image, use')
+    );
     let cumulativeLength = 0;
     let cumulativeTime = 0;
     let hintIndex = 0;
@@ -385,17 +392,30 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       let nodeDuration = 0;
 
       if (tag === 'text') {
-        const { entries, totalLength, totalDuration } = this._processTextElement(node, cumulativeLength, startTime, this._speed, currentMultiplier);
+        const { entries, totalLength, totalDuration } = this._processTextElement(
+          node,
+          cumulativeLength,
+          startTime,
+          this._speed,
+          currentMultiplier
+        );
         entries.forEach((entry) => animEntries.push(entry));
         length = totalLength;
         nodeDuration = totalDuration;
-      } else if (typeof node.getTotalLength === 'function') {
-        try {
-          length = node.getTotalLength();
-        } catch {
-          length = 0;
+      } else {
+        if (typeof node.getTotalLength === 'function') {
+          try {
+            length = node.getTotalLength();
+          } catch {
+            length = 0;
+          }
         }
-        if (length > 0) {
+        const computedStyle =
+          typeof window !== 'undefined' && typeof window.getComputedStyle === 'function'
+            ? window.getComputedStyle(node)
+            : null;
+        const canAnimateStroke = this._canAnimateStroke(node, length, computedStyle);
+        if (canAnimateStroke) {
           const segmentDuration = (length / effectiveSpeed) * 1000;
           const segmentStartTime = startTime;
           const segmentEndTime = segmentStartTime + segmentDuration;
@@ -407,11 +427,31 @@ class SimpleAnimateSvgComponent extends HTMLElement {
             isText: false,
             duration: segmentDuration,
             startTime: segmentStartTime,
-            endTime: segmentEndTime
+            endTime: segmentEndTime,
+            behavior: 'stroke',
+            finalFillOpacity: computedStyle ? computedStyle.fillOpacity : '1',
+            finalOpacity: computedStyle ? computedStyle.opacity : '1'
           });
           nodeDuration = segmentDuration;
-          node.style.fillOpacity = node.style.fillOpacity || '0';
+          node.style.fillOpacity = '0';
           node.style.strokeOpacity = node.style.strokeOpacity || '1';
+        } else {
+          animEntries.push({
+            el: node,
+            length: 0,
+            startAt,
+            endAt: startAt,
+            isText: false,
+            duration: 0,
+            startTime,
+            endTime: startTime,
+            behavior: 'instant',
+            finalOpacity: computedStyle ? computedStyle.opacity : '1'
+          });
+          node.style.opacity = '0';
+          if (!node.style.transition) {
+            node.style.transition = 'opacity 0.15s linear';
+          }
         }
       }
 
@@ -433,15 +473,23 @@ class SimpleAnimateSvgComponent extends HTMLElement {
 
 
     this._paths.forEach((segment) => {
-      if (!segment.isText) {
-        const len = segment.length;
-        segment.el.style.strokeDasharray = `${len} ${len}`;
-        segment.el.style.strokeDashoffset = `${len}`;
-        segment.el.style.transition = 'stroke-dashoffset 0.1s linear';
-      } else {
+      if (segment.isText) {
         segment.el.style.fillOpacity = '0';
         segment.el.style.transition = 'fill-opacity 0.15s linear';
+        return;
       }
+      if (segment.behavior === 'instant') {
+        segment.el.style.opacity = '0';
+        if (!segment.el.style.transition) {
+          segment.el.style.transition = 'opacity 0.15s linear';
+        }
+        return;
+      }
+      segment.el.style.fillOpacity = '0';
+      const len = segment.length;
+      segment.el.style.strokeDasharray = `${len} ${len}`;
+      segment.el.style.strokeDashoffset = `${len}`;
+      segment.el.style.transition = 'stroke-dashoffset 0.1s linear';
     });
 
     this._pausePoints = this._mapCommentsToPausePoints(
@@ -493,7 +541,8 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         isText: true,
         startTime: currentTime,
         endTime: currentTime + charDuration,
-        duration: charDuration
+        duration: charDuration,
+        behavior: 'text'
       });
       cursor += charLength;
       currentTime += charDuration;
@@ -546,13 +595,32 @@ class SimpleAnimateSvgComponent extends HTMLElement {
   }
 
   _extractDrawablePositions(svgText) {
-    const regex = /<(path|line|polyline|polygon|rect|circle|ellipse|text)(\s[^>]*)*>/g;
+    const regex = /<(path|line|polyline|polygon|rect|circle|ellipse|text|image|use)(\s[^>]*)*>/g;
     const positions = [];
     let match;
     while ((match = regex.exec(svgText)) !== null) {
       positions.push({ index: match.index, tag: match[1] });
     }
     return positions;
+  }
+
+  _canAnimateStroke(node, length, computedStyle = null) {
+    if (length <= 0) return false;
+    let style = computedStyle;
+    if (!style) {
+      if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+        return true;
+      }
+      style = window.getComputedStyle(node);
+    }
+    const stroke = style.stroke;
+    if (!stroke || stroke === 'none') return false;
+    const strokeOpacity = parseFloat(style.strokeOpacity);
+    const opacity = Number.isFinite(strokeOpacity) ? strokeOpacity : 1;
+    if (opacity <= 0) return false;
+    const strokeWidth = parseFloat(style.strokeWidth);
+    const hasStrokeWidth = Number.isFinite(strokeWidth) ? strokeWidth > 0 : true;
+    return hasStrokeWidth;
   }
 
   _parsePauseComments(svgText) {
@@ -747,8 +815,13 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       if (index < this._currentSegmentIndex) {
         if (segment.isText) {
           segment.el.style.fillOpacity = '1';
+        } else if (segment.behavior === 'instant') {
+          segment.el.style.opacity = segment.finalOpacity ?? '1';
         } else {
           segment.el.style.strokeDashoffset = '0';
+          if (segment.finalFillOpacity !== undefined) {
+            segment.el.style.fillOpacity = segment.finalFillOpacity;
+          }
         }
         return;
       }
@@ -756,8 +829,13 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       if (index > this._currentSegmentIndex) {
         if (segment.isText) {
           segment.el.style.fillOpacity = '0';
+        } else if (segment.behavior === 'instant') {
+          segment.el.style.opacity = '0';
         } else {
           segment.el.style.strokeDashoffset = `${segment.length}`;
+          if (segment.finalFillOpacity !== undefined) {
+            segment.el.style.fillOpacity = '0';
+          }
         }
         return;
       }
@@ -767,10 +845,19 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         return;
       }
 
+      if (segment.behavior === 'instant') {
+        const targetOpacity = segment.finalOpacity ?? '1';
+        segment.el.style.opacity = time >= segment.endTime ? targetOpacity : '0';
+        return;
+      }
+
       const elapsedInSegment = Math.max(0, Math.min(segment.duration, time - segment.startTime));
       const segmentProgress = segment.duration > 0 ? elapsedInSegment / segment.duration : time >= segment.endTime ? 1 : 0;
       const offset = Math.max(segment.length * (1 - segmentProgress), 0);
       segment.el.style.strokeDashoffset = `${offset}`;
+      if (segment.finalFillOpacity !== undefined) {
+        segment.el.style.fillOpacity = '0';
+      }
     });
   }
 
