@@ -47,6 +47,9 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     this._waitingForManualResume = false;
     this._wrapper = null;
     this._parseWarningBanner = null;
+    this._currentSvgElement = null;
+    this._isSvgRevealed = false;
+    this._activeLoadController = null;
   }
 
   connectedCallback() {
@@ -62,6 +65,10 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     if (this._timedPauseTimeout) {
       clearTimeout(this._timedPauseTimeout);
       this._timedPauseTimeout = null;
+    }
+    if (this._activeLoadController) {
+      this._activeLoadController.abort();
+      this._activeLoadController = null;
     }
   }
 
@@ -90,6 +97,12 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       this._parseWarningBanner.remove();
       this._parseWarningBanner = null;
     }
+    if (this._activeLoadController) {
+      this._activeLoadController.abort();
+      this._activeLoadController = null;
+    }
+    this._currentSvgElement = null;
+    this._isSvgRevealed = false;
 
     const width = this.getAttribute('width') || '100%';
     const height = this.getAttribute('height');
@@ -284,7 +297,9 @@ class SimpleAnimateSvgComponent extends HTMLElement {
 
   async _loadSvg(filePath, options) {
     try {
-      const response = await fetch(filePath);
+      const controller = new AbortController();
+      this._activeLoadController = controller;
+      const response = await fetch(filePath, { signal: controller.signal });
       if (!response.ok) throw new Error('Unable to fetch SVG');
       const svgText = await response.text();
       this._pauseComments = this._parsePauseComments(svgText);
@@ -311,6 +326,9 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       if (!svgEl) throw new Error('SVG tag not found');
       this._svgWrapper.innerHTML = '';
       this._svgWrapper.appendChild(svgEl);
+      this._currentSvgElement = svgEl;
+      this._isSvgRevealed = false;
+      svgEl.style.visibility = 'hidden';
       this._applySizing(svgEl, options.sizing, options.width);
       if (options.invertColors) {
         this._invertColors(svgEl);
@@ -321,9 +339,15 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       if (!this._autoPlay) {
         this._draw(0);
       }
+      this._activeLoadController = null;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        this._activeLoadController = null;
+        return;
+      }
       this._showMessage('Error loading SVG');
       console.error(error);
+      this._activeLoadController = null;
     }
   }
 
@@ -354,14 +378,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
       svgEl.style.width = width;
       svgEl.style.height = 'auto';
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    } else if (sizing === 'none') {
-      const targetWidth = (bbox.width || 100) + padding * 2;
-      const targetHeight = (bbox.height || 100) + padding * 2;
-      svgEl.style.width = `${targetWidth}px`;
-      svgEl.style.height = `${targetHeight}px`;
-      svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     }
-
   }
 
   _prepareAnimation(svgEl, svgText) {
@@ -733,6 +750,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         return;
       }
       const clampedElapsed = Math.max(0, elapsed);
+      this._draw(clampedElapsed);
       let progress = clampedElapsed / this._duration;
       while (
         this._currentPauseIndex < this._pausePoints.length &&
@@ -762,7 +780,6 @@ class SimpleAnimateSvgComponent extends HTMLElement {
           return;
         }
       }
-      this._draw(clampedElapsed);
       this._animationFrameId = requestAnimationFrame(drawFrame);
     };
     this._showControls(false);
@@ -860,6 +877,7 @@ class SimpleAnimateSvgComponent extends HTMLElement {
         segment.el.style.fillOpacity = '0';
       }
     });
+    this._showSvg();
   }
 
   _cancelAnimation() {
@@ -886,6 +904,12 @@ class SimpleAnimateSvgComponent extends HTMLElement {
     } else {
       this._controlsOverlay.classList.remove('force-visible');
     }
+  }
+
+  _showSvg() {
+    if (this._isSvgRevealed || !this._currentSvgElement) return;
+    this._currentSvgElement.style.visibility = 'visible';
+    this._isSvgRevealed = true;
   }
 
   _showParseWarningBanner(message) {
